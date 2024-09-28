@@ -1,6 +1,8 @@
 import:py from mtllm.llms {OpenAI}
-
 glob llm = OpenAI(model_name='gpt-3.5-turbo');
+
+# import:py from mtllm.llms {Ollama}
+# glob llm = Ollama(model_name='llama3.2');
 
 import:jac from rag {RagEngine}
 glob rag_engine:RagEngine = RagEngine();
@@ -10,7 +12,8 @@ glob rag_engine:RagEngine = RagEngine();
 
 enum ChatType {
     RAG : 'Need to use Retrievable information in specific documents to respond' = "RAG",
-    QA : 'Given context is enough for an answer' = "user_qa"
+    QA : 'Given context is enough for an answer' = "QA",
+    MATH : 'Given mathematic calculation, do math' = "MATH"
 }
 
 node Router {
@@ -50,6 +53,59 @@ walker interact {
     }
 }
 
+walker memorywipe {
+    has session_id: str;
+    can init_session with `root entry {
+        visit [-->](`?Session)(?id == self.session_id) else {
+            if session_node {
+                session_node.chat_history = [];
+                print("Memory wiped for session.");
+            } else {
+                print("Session  not found.");
+            }
+        }
+    }
+}
+
+walker emotion {
+    has message: str;
+    has emotion: str;
+
+    can analyze_emotion with `root entry{
+        emotion = here.classify(message = self.message);
+        print("Emotion:", emotion);
+        visit [-->](`?Chat)(?chat_type==emotion);
+    }
+}
+
+# walker EmotionAnalyzer {
+#     has message: str;
+#     has emotion: str;
+
+#     can analyze_emotion with `root entry {
+#         #// Use the LLM to classify the emotion of the message
+#         here.emotion = analyze_emotion_llm(here.message);
+#         #print(f"Detected emotion: {here.emotion}");
+
+#         #// Based on the detected emotion, perform specific actions
+#         if here.emotion == "negative" {
+#             print("User seems upset. Provide a more empathetic response.");
+#         } else if here.emotion == "positive" {
+#             print("User is happy. Provide a cheerful response.");
+#         } else {
+#             print("Neutral tone detected.");
+#         }
+#     }
+
+#     can analyze_emotion_llm with (message: str) -> 'emotion':str by llm() {
+#         #// Example using LLM to analyze the sentiment or emotion of the message
+#         return llm.classify(message, categories=["positive", "negative", "neutral"]);
+#     }
+# }
+
+
+
+
 
 node Chat {
     has chat_type: ChatType;
@@ -82,7 +138,6 @@ node QAChat :Chat: {
         here.response = respond_with_llm(here.message, here.chat_history, agent_role="You are a conversation agent designed to help users with their queries");
     }
 }
-
 
 
 node Session {
